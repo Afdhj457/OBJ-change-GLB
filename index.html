@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBJ 转 GLB 在线转换器</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #2a2a2a;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+            max-width: 600px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        h1 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-weight: 400;
+            color: #ffffff;
+            font-size: 2rem;
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #aaaaaa;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+        }
+        .file-drop-area {
+            border: 2px dashed #555;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background-color: #1e1e1e;
+            margin-bottom: 20px;
+        }
+        .file-drop-area:hover, .file-drop-area.dragover {
+            border-color: #4caf50;
+            background-color: #2a2a2a;
+        }
+        .file-drop-area input {
+            display: none;
+        }
+        .file-label {
+            display: inline-block;
+            background-color: #4caf50;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 10px;
+        }
+        .file-label:hover {
+            background-color: #45a049;
+        }
+        .file-name {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #bbbbbb;
+            word-break: break-all;
+        }
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #444;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #4caf50;
+            transition: width 0.2s;
+        }
+        .status-text {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #cccccc;
+            margin-top: 8px;
+        }
+        button {
+            background-color: #4caf50;
+            border: none;
+            color: white;
+            padding: 14px 30px;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+            letter-spacing: 1px;
+            transition: background 0.2s, transform 0.1s;
+            margin-top: 10px;
+        }
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        button:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        button:disabled {
+            background-color: #3a3a3a;
+            color: #777;
+            cursor: not-allowed;
+        }
+        .info {
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: #888;
+            text-align: center;
+            border-top: 1px solid #3a3a3a;
+            padding-top: 15px;
+        }
+        .info code {
+            background-color: #1e1e1e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #4caf50;
+            font-family: monospace;
+        }
+        .error-msg {
+            color: #ff6b6b;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            min-height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OBJ → GLB</h1>
+        <div class="subtitle">在浏览器中直接转换，无需上传</div>
+
+        <div class="file-drop-area" id="dropArea">
+            <input type="file" id="fileInput" accept=".obj">
+            <div class="file-label" id="fileLabel">选择 OBJ 文件</div>
+            <div>或拖拽文件到此处</div>
+            <div class="file-name" id="fileName">未选择文件</div>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="status-text" id="statusText">准备中...</div>
+        </div>
+
+        <button id="convertBtn" disabled>转换为 GLB</button>
+        <div class="error-msg" id="errorMsg"></div>
+
+        <div class="info">
+            支持标准 OBJ 格式（可含 MTL 材质，但仅导出几何体与默认材质）<br>
+            基于 Three.js 实现，转换结果仅供参考<br>
+            <small>请确保同目录下存在 <code>three.module.js</code>、<code>OBJLoader.js</code>、<code>GLTFExporter.js</code></small>
+        </div>
+    </div>
+
+    <!-- 从同目录加载 Three.js 相关文件 -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./three.module.js",
+                "three/addons/loaders/OBJLoader.js": "./OBJLoader.js",
+                "three/addons/exporters/GLTFExporter.js": "./GLTFExporter.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+        // 获取 DOM 元素
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileLabel = document.getElementById('fileLabel');
+        const fileNameDisplay = document.getElementById('fileName');
+        const convertBtn = document.getElementById('convertBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const statusText = document.getElementById('statusText');
+        const errorMsg = document.getElementById('errorMsg');
+
+        let currentFile = null;
+
+        // 阻止默认拖拽行为
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // 高亮拖拽区域
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                dropArea.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                dropArea.classList.remove('dragover');
+            }, false);
+        });
+
+        // 处理文件拖拽
+        dropArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        // 点击选择文件
+        fileLabel.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files.length > 0) {
+                handleFile(fileInput.files[0]);
+            }
+        });
+
+        // 处理选中的文件
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.obj')) {
+                errorMsg.textContent = '请选择 .obj 文件';
+                fileInput.value = '';
+                currentFile = null;
+                fileNameDisplay.textContent = '未选择文件';
+                convertBtn.disabled = true;
+                return;
+            }
+            errorMsg.textContent = '';
+            currentFile = file;
+            fileNameDisplay.textContent = file.name;
+            convertBtn.disabled = false;
+            // 重置进度条
+            progressContainer.style.display = 'none';
+            progressFill.style.width = '0%';
+            statusText.textContent = '准备中...';
+        }
+
+        // 更新进度
+        function updateProgress(percent, message) {
+            progressContainer.style.display = 'block';
+            progressFill.style.width = `${percent}%`;
+            if (message) statusText.textContent = message;
+        }
+
+        // 转换按钮点击
+        convertBtn.addEventListener('click', async () => {
+            if (!currentFile) {
+                errorMsg.textContent = '请先选择 OBJ 文件';
+                return;
+            }
+
+            // 禁用按钮防止重复点击
+            convertBtn.disabled = true;
+            convertBtn.textContent = '转换中...';
+            errorMsg.textContent = '';
+            progressContainer.style.display = 'block';
+            updateProgress(0, '读取文件...');
+
+            try {
+                // 读取文件内容
+                const fileContent = await readFileAsText(currentFile);
+                updateProgress(20, '解析 OBJ 模型...');
+
+                // 使用 OBJLoader 解析
+                const loader = new OBJLoader();
+                const object = loader.parse(fileContent);
+                updateProgress(50, '处理模型...');
+
+                // 确保模型有材质
+                object.traverse((child) => {
+                    if (child.isMesh) {
+                        if (!child.material) {
+                            child.material = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+                        }
+                    }
+                });
+
+                updateProgress(70, '准备导出 GLB...');
+
+                // 使用 GLTFExporter 导出为 GLB
+                const exporter = new GLTFExporter();
+                
+                const glbBlob = await new Promise((resolve, reject) => {
+                    exporter.parse(
+                        object,
+                        (result) => {
+                            const blob = new Blob([result], { type: 'application/octet-stream' });
+                            resolve(blob);
+                        },
+                        (error) => {
+                            reject(error);
+                        },
+                        { binary: true }
+                    );
+                });
+
+                updateProgress(90, '生成下载...');
+
+                // 下载文件
+                const originalName = currentFile.name;
+                const glbName = originalName.replace(/\.obj$/i, '.glb');
+                const url = URL.createObjectURL(glbBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = glbName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                updateProgress(100, '转换完成！');
+                
+                setTimeout(() => {
+                    convertBtn.disabled = false;
+                    convertBtn.textContent = '转换为 GLB';
+                }, 1500);
+
+            } catch (error) {
+                console.error('转换失败:', error);
+                errorMsg.textContent = `转换失败: ${error.message || '未知错误'}`;
+                updateProgress(0, '转换失败');
+                convertBtn.disabled = false;
+                convertBtn.textContent = '转换为 GLB';
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 2000);
+            }
+        });
+
+        // 读取文件为文本
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('读取文件失败'));
+                reader.readAsText(file);
+            });
+        }
+
+        // 允许点击 file-drop-area 触发文件选择
+        dropArea.addEventListener('click', (e) => {
+            if (e.target === fileLabel || e.target === fileInput) return;
+            fileInput.click();
+        });
+
+        // 重置文件输入的值，允许重复选择同一文件
+        fileInput.addEventListener('click', (e) => {
+            e.target.value = '';
+        });
+    </script>
+</body>
+</html>
